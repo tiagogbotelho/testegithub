@@ -23,7 +23,7 @@ jobs:
 
       - name: Build container on remote HPC
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sbatch --wait <<EOT
+          ssh -o ServerAliveInterval=60 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sbatch --wait <<EOT
           #!/bin/bash
           #SBATCH -J singularity-build
           #SBATCH --output=.ci-build-%j.log
