@@ -1,0 +1,19 @@
+Bootstrap: docker
+From: nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+%post
+    # Atualiza o sistema e instala Python e Pip
+    apt-get update
+    apt-get install -y python3 python3-pip
+
+    # Instala o PyTorch (biblioteca que usaremos para acessar a GPU)
+    pip3 install torch --no-cache-dir
+
+%files
+    # Copia nosso script Python para dentro do contêiner
+    # Da sua máquina (check_gpu.py) para dentro do contêiner (/opt/check_gpu.py)
+    check_gpu.py /opt/check_gpu.py
+
+%runscript
+    # Comando que será executado quando o contêiner rodar
+    exec python3 /opt/check_gpu.py
