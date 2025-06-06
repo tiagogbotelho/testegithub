@@ -10,6 +10,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # Este passo baixa seu código (incluindo o gpu_test.def) para o robô
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Install ssh key
         uses: shimataro/ssh-key-action@v2
         with:
@@ -21,7 +25,13 @@ jobs:
           mkdir -p ~/.config/rclone
           echo "${{ secrets.RCLONE_CONF }}" > ~/.config/rclone/rclone.conf
 
-      - name: Build container on remote HPC
+      # ETAPA 1: Copia o arquivo da receita para o cluster
+      - name: Copy recipe file to HPC
+        run: |
+          scp -o ServerAliveInterval=60 gpu_test.def ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/
+
+      # ETAPA 2: Envia o job que usa o arquivo copiado
+      - name: Submit build job on HPC
         run: |
           ssh -o ServerAliveInterval=60 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sbatch --wait <<EOT
           #!/bin/bash
@@ -31,18 +41,21 @@ jobs:
           #SBATCH --mem=16G
 
           set -e
-          echo '--- Iniciando job no cluster (método echo robusto) ---'
+          echo '--- Iniciando job no cluster (método scp) ---'
           
-          recipe_file=\$(mktemp)
-          echo 'Criando arquivo de receita temporário...'
-          
-          echo -e \"\${{ secrets.RECIPE }}\" > \$recipe_file
-
+          # O arquivo de receita já está em ~/gpu_test.def
+          # Construímos o container usando esse arquivo
           echo 'Construindo o container...'
-          singularity build --fakeroot ${{ secrets.CONTAINER_NAME }}.sif \$recipe_file
+          singularity build --fakeroot ${{ secrets.CONTAINER_NAME }}.sif ~/gpu_test.def
 
+          # Faz o upload do resultado
           echo 'Enviando o container para a nuvem...'
           rclone copy --progress ${{ secrets.CONTAINER_NAME }}.sif '${{ vars.COLLECTION_CONTAINER }}'
+          
+          # Limpa os arquivos que copiamos e criamos
+          echo 'Limpando arquivos temporários...'
+          rm ~/gpu_test.def
+          rm \${{ secrets.CONTAINER_NAME }}.sif
 
           echo '--- Job no cluster finalizado com sucesso ---'
           EOT"
