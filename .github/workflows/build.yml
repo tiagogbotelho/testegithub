@@ -31,16 +31,18 @@ jobs:
           #SBATCH --mem=16G
 
           set -e
-          echo '--- Iniciando job no cluster ---'
+          echo '--- Iniciando job no cluster (método de receita via secret) ---'
+          
+          # Cria um arquivo de receita temporário com o conteúdo do secret
+          recipe_file=\$(mktemp)
+          echo 'Criando arquivo de receita temporário...'
+          cat > \$recipe_file << RECIPE
+          ${{ secrets.RECIPE }}
+          RECIPE
 
-          # Clona o repositório para ter acesso aos arquivos de receita
-          echo 'Clonando o repositório...'
-          git clone https://github.com/${{ github.repository }}.git build_temp
-          cd build_temp
-
-          # Constrói o container usando o arquivo de receita do repositório
+          # Constrói o container usando a receita temporária
           echo 'Construindo o container...'
-          singularity build --fakeroot ${{ secrets.CONTAINER_NAME }}.sif gpu_test.def
+          singularity build --fakeroot ${{ secrets.CONTAINER_NAME }}.sif \$recipe_file
 
           # Faz o upload do resultado
           echo 'Enviando o container para a nuvem...'
