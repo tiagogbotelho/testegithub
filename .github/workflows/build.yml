@@ -1,11 +1,7 @@
-name: Build container
+name: Build Container
 
 on:
   push:
-    branches:
-      - main
-      - master
-  pull_request:
     branches:
       - main
       - master
@@ -14,8 +10,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-
       - name: Install ssh key
         uses: shimataro/ssh-key-action@v2
         with:
@@ -27,21 +21,30 @@ jobs:
           mkdir -p ~/.config/rclone
           echo "${{ secrets.RCLONE_CONF }}" > ~/.config/rclone/rclone.conf
 
-      - name: Build container on remote
+      - name: Build container on remote HPC
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sbatch --wait <<EOT
           #!/bin/bash
           #SBATCH -J singularity-build
-          #SBATCH -o .ci-build.log
-          #SBATCH -t 20
-          #SBATCH --mem=8G
+          #SBATCH --output=.ci-build-%j.log
+          #SBATCH --time=30
+          #SBATCH --mem=16G
 
           set -e
-          recipe=\$(mktemp)
-          cat > \$recipe << RECIPE
-          ${{ secrets.RECIPE }}
-          RECIPE
-          rclone copy singularity-build \$recipe \${{ secrets.COLLECTION_CONTAINER }}
-          singularity build --fakeroot \${{ secrets.CONTAINER_NAME }}.simg \$recipe
-          rclone copy \${{ secrets.CONTAINER_NAME }}.simg \${{ secrets.COLLECTION_CONTAINER }}
+          echo '--- Iniciando job no cluster ---'
+
+          # Clona o repositório para ter acesso aos arquivos de receita
+          echo 'Clonando o repositório...'
+          git clone https://github.com/${{ github.repository }}.git build_temp
+          cd build_temp
+
+          # Constrói o container usando o arquivo de receita do repositório
+          echo 'Construindo o container...'
+          singularity build --fakeroot ${{ secrets.CONTAINER_NAME }}.sif gpu_test.def
+
+          # Faz o upload do resultado
+          echo 'Enviando o container para a nuvem...'
+          rclone copy --progress ${{ secrets.CONTAINER_NAME }}.sif '${{ vars.COLLECTION_CONTAINER }}'
+
+          echo '--- Job no cluster finalizado com sucesso ---'
           EOT"
