@@ -38,7 +38,7 @@ jobs:
           #SBATCH -J singularity-build
           #SBATCH --output=.ci-build-%j.log
           #SBATCH --time=30
-          #SBATCH --mem=16G
+          #SBATCH --mem=32G
 
           set -e
           echo '--- Iniciando job no cluster (método scp) ---'
