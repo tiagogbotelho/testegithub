@@ -1,6 +1,29 @@
-- name: Build container on remote HPC
+name: Build Container
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install ssh key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+
+      - name: Adding rclone config
         run: |
-          ssh -o ServerAliveInterval=60 <span class="math-inline">\{\{ secrets\.SSH\_USER \}\}@</span>{{ secrets.SSH_HOST }} "sbatch --wait <<EOT
+          mkdir -p ~/.config/rclone
+          echo "${{ secrets.RCLONE_CONF }}" > ~/.config/rclone/rclone.conf
+
+      - name: Build container on remote HPC
+        run: |
+          ssh -o ServerAliveInterval=60 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sbatch --wait <<EOT
           #!/bin/bash
           #SBATCH -J singularity-build
           #SBATCH --output=.ci-build-%j.log
@@ -10,19 +33,16 @@
           set -e
           echo '--- Iniciando job no cluster (método echo robusto) ---'
           
-          # Cria um arquivo de receita temporário com o conteúdo do secret
-          recipe_file=\<span class="math-inline">\(mktemp\)
-echo 'Criando arquivo de receita temporário\.\.\.'
-\# Usa 'echo' com aspas e a flag '\-e' para interpretar quebras de linha\. É mais seguro\.
-echo \-e \\"\\</span>{{ secrets.RECIPE }}\" > \$recipe_file
+          recipe_file=\$(mktemp)
+          echo 'Criando arquivo de receita temporário...'
+          
+          echo -e \"\${{ secrets.RECIPE }}\" > \$recipe_file
 
-          # Constrói o container usando a receita temporária
           echo 'Construindo o container...'
           singularity build --fakeroot ${{ secrets.CONTAINER_NAME }}.sif \$recipe_file
 
-          # Faz o upload do resultado
           echo 'Enviando o container para a nuvem...'
-          rclone copy --progress <span class="math-inline">\{\{ secrets\.CONTAINER\_NAME \}\}\.sif '</span>{{ vars.COLLECTION_CONTAINER }}'
+          rclone copy --progress ${{ secrets.CONTAINER_NAME }}.sif '${{ vars.COLLECTION_CONTAINER }}'
 
           echo '--- Job no cluster finalizado com sucesso ---'
           EOT"
